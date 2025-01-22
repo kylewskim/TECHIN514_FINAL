@@ -17,3 +17,5 @@ The display device is detachable from the existing light switch and controls the
 ### 3. System Architecture
 
 The sensing device and display device communicate through BLE.
+
+![Image of system architecture](./img/systemarchitecture.png)
