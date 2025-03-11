@@ -431,7 +431,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "techin514_final_pcb.kicad_pro",
+    "filename": "techin514_final_motor.kicad_pro",
     "version": 1
   },
   "net_settings": {
@@ -466,11 +466,11 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "../../../../../../Desktop/",
+      "plot": "../../../../../../Desktop/motorpcb/",
       "pos_files": "",
       "specctra_dsn": "",
-      "step": "../../../../../../Desktop/techin514_final_pcb_step1.step",
-      "svg": "../../../../../../Desktop/",
+      "step": "",
+      "svg": "",
       "vrml": ""
     },
     "page_layout_descr_file": ""
@@ -527,23 +527,11 @@
           "label": "DNP",
           "name": "${DNP}",
           "show": true
-        },
-        {
-          "group_by": false,
-          "label": "#",
-          "name": "${ITEM_NUMBER}",
-          "show": false
-        },
-        {
-          "group_by": false,
-          "label": "Description",
-          "name": "Description",
-          "show": false
         }
       ],
       "filter_string": "",
       "group_symbols": true,
-      "name": "",
+      "name": "Grouped By Value",
       "sort_asc": true,
       "sort_field": "Reference"
     },
@@ -586,11 +574,6 @@
     "subpart_first_id": 65,
     "subpart_id_separator": 0
   },
-  "sheets": [
-    [
-      "27d5d99c-95f9-41c8-9186-1b9e0e51d5d1",
-      "Root"
-    ]
-  ],
+  "sheets": [],
   "text_variables": {}
 }
