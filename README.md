@@ -6,6 +6,7 @@ SIT-UP features a wearable sensing device and a display unit that work together 
 
 The sensing device is a wearable unit designed to detect and track sit-up motions using a gyroscope. It processes movement data and wirelessly transmits the information to the display device via Bluetooth. Powered by a 150mAh battery, it is lightweight, compact, and optimized for short workout sessions, ensuring minimal interference with the user’s movements.
 ![Image of sensing device](./img/sensingdevice.png) {width=200}
+<img src="./img/sensingdevice.png" style="width:50%;">
 
 ### 2. Display Device
 
