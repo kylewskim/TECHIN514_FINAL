@@ -1,5 +1,3 @@
-///KYLE DISPLAY
-
 #include <Arduino.h>
 #include <SwitecX25.h>
 #include <SPI.h>
@@ -27,12 +25,13 @@ Adafruit_SH1107 display = Adafruit_SH1107(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire1, O
 #define B_MINUS 9
 #define STEPS 945
 
-#define ROTARY_B 5  // 버튼 핀
+#define ROTARY_B 5 // BUTTON
 #define ROTARY_A1 6 // CLK
 #define ROTARY_A2 7 // DT
 
-#define LED_R 35 // 빨간색 LED (70도 이상)
-#define LED_G 36 // 초록색 LED (20도 이하)
+#define LED_R 35
+#define LED_G 37
+#define LED_B 36
 
 static BLEUUID serviceUUID("40808a19-ee3d-49df-bfbb-e76f5bcbafde");
 static BLEUUID charUUID("53d800b6-f31c-4650-8304-64964e55012a");
@@ -50,6 +49,7 @@ bool lowAngleDetected = false; // ✅ 초록 → 빨간 사이클 감지용
 bool buttonPressed = false;
 unsigned long lastDebounceTime = 0;
 const int debounceDelay = 50; // 버튼 디바운싱 딜레이
+String BLEstatus = "";
 
 SwitecX25 motor1(STEPS, A_PLUS, A_MINUS, B_PLUS, B_MINUS);
 RotaryEncoder *encoder = nullptr;
@@ -76,7 +76,7 @@ static void notifyCallback(
         // ✅ LED 상태 업데이트 & 목표 개수 감소
         updateLEDandGoal();
         
-        int motorTargetPos = receivedAngle * 3.25 + 180;
+        int motorTargetPos = receivedAngle * 3.25 + 270;
         Serial.print("🌀 Motor Target Position: ");
         Serial.println(motorTargetPos);
         motor1.setPosition(motorTargetPos); // 모터 이동 명령
@@ -104,8 +104,10 @@ class MyClientCallback : public BLEClientCallbacks {
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice advertisedDevice) {
     Serial.println("🔍 Found BLE Device!");
+    BLEstatus = "Searching device";
     if (advertisedDevice.isAdvertisingService(serviceUUID)) {
         Serial.println("✅ Target BLE Device Found! Connecting...");
+        BLEstatus = "Target device found";
         BLEDevice::getScan()->stop();
         myDevice = new BLEAdvertisedDevice(advertisedDevice);
         doConnect = true;
@@ -127,13 +129,28 @@ void setup() {
 
     pinMode(LED_R, OUTPUT);
     pinMode(LED_G, OUTPUT);
+    pinMode(LED_B, OUTPUT);
     digitalWrite(LED_R, LOW);
     digitalWrite(LED_G, LOW);
+    digitalWrite(LED_B, LOW);
 
-    // run the motor against the stops
-    motor1.zero();
-    // start moving towards the center of the range
-    motor1.setPosition(STEPS/2);
+  motor1.zero();
+  Serial.println("ZERO1");
+  delay(1000);
+  motor1.update();
+
+  // // **🔹 전원 켜질 때 항상 한 방향으로 이동하여 위치 보정**
+  // Serial.println("Resetting motor position...");
+  // motor1.setPosition(-STEPS);  // 충분히 반시계 방향으로 이동
+  // while (motor1.currentStep != motor1.targetStep) {
+  //     motor1.update();
+  //     delay(5);
+  // }
+
+  // // **🔹 현재 위치를 0으로 설정**
+  // motor1.zero();
+  // Serial.println("Motor position reset complete!");
+    // 벽이 있는 방향(최소 위치)으로 충분히 이동
 
     display.begin(0x3D, true);
     display.display();
@@ -144,7 +161,31 @@ void setup() {
     display.setCursor(36, 64);
     display.println(F("SITUP"));
     display.display();
-    delay(2000);
+      motor1.setPosition(-STEPS);  
+  Serial.println("-STEPS");
+  Serial.println(motor1.currentStep);
+  while (motor1.currentStep != motor1.targetStep) {
+      motor1.update();
+      delay(5);
+  }
+  Serial.println("DONE");
+
+  // 이 위치를 기준점(0)으로 설정
+  motor1.zero();
+  Serial.println("Calibration complete! Motor is now at position 0.");
+
+  // 이제 gauge 사용 범위 (180도)만큼 사용할 수 있음
+  motor1.setPosition(STEPS);  // 사용 범위의 중앙으로 이동
+  while (motor1.currentStep != motor1.targetStep) {
+      motor1.update();
+      delay(5);
+  }
+  motor1.setPosition(STEPS/2);  // 사용 범위의 중앙으로 이동
+  while (motor1.currentStep != motor1.targetStep) {
+      motor1.update();
+      delay(5);
+  }
+
     display.clearDisplay();
 
     // ✅ BLE 초기화
@@ -162,22 +203,25 @@ void setup() {
 
 void loop() {
     if (status == 1) {
-        handleRotaryEncoder();
-        handleButtonPress();
-        updateGoalDisplay();
+      handleRotaryEncoder();
+      handleButtonPress();
+      updateGoalDisplay();
     } else if (status == 2) {
-        updateOKIE();
+      updateOKIE();
     } else if (status == 3) {
-        updateReady();
+      updateReady();
+    } else if (status == 4) {
+      updateComplete();
     }
 
     if (doConnect) {
         connectToBLEServer();
     }
 
-    if (motor1.currentStep != motor1.targetStep) {
+    if (motor1.currentStep != motor1.targetStep && status == 3) {
         motor1.update();
     }
+    delay(1);
 }
 
 // 🔄 **로터리 인코더 값 감지 + 음수 방지**
@@ -214,13 +258,13 @@ void handleButtonPress() {
 // 🖥 **목표 설정 화면 업데이트**
 void updateGoalDisplay() {
     display.clearDisplay();
-    display.setTextSize(1);
+    display.setTextSize(2);
     display.setTextColor(SH110X_WHITE);
-    display.setCursor(28, 32);
-    display.println(F("Set your goal"));
-    display.setTextSize(3);
-    display.setCursor(56, 64);
+    display.setCursor(54, 64);
     display.println(goal);
+    display.setTextSize(1);
+    display.setCursor(8, 120);
+    display.println(BLEstatus);
     display.display();
 }
 
@@ -229,39 +273,110 @@ void updateOKIE() {
     display.clearDisplay();
     display.setTextSize(2);
     display.setTextColor(SH110X_WHITE);
-    display.setCursor(48, 64);
-    display.println("OKIE");
+    display.clearDisplay();
+    display.setCursor(54, 64);
+    display.println("3");
     display.display();
+    digitalWrite(LED_R, HIGH);
+    digitalWrite(LED_G, LOW);
+    digitalWrite(LED_B, LOW);
+    delay(1000);
+    display.clearDisplay();
+    display.setCursor(54, 64);
+    display.println("2");
+    display.display();
+    digitalWrite(LED_R, HIGH);
+    digitalWrite(LED_G, HIGH);
+    digitalWrite(LED_B, LOW);
+    delay(1000);
+    display.clearDisplay();
+    display.setCursor(54, 64);
+    display.println("1");
+    display.display();
+    digitalWrite(LED_R, LOW);
+    digitalWrite(LED_G, HIGH);
+    digitalWrite(LED_B, LOW);
+    delay(1000);
+    status = 3;
 }
 
 // 🖥 **Ready 화면 업데이트**
 void updateReady() {
     display.clearDisplay();
     display.setTextSize(2);
-    display.setCursor(40, 20);
-    display.println("Ready!");
-    display.setCursor(20, 60);
-    display.print("Angle: ");
-    display.println(receivedAngle);
-    display.setCursor(20, 90);
-    display.print("Goal: ");
+    display.setCursor(54, 64);
     display.println(goal);
+    display.setTextSize(1);
+    display.setCursor(48, 100);
+    display.println(receivedAngle);
     display.display();
+}
+
+void updateComplete() {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(32, 64);
+  display.print("DONE");
+  display.display();
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, HIGH);
+  digitalWrite(LED_B, HIGH);
+  delay(200);
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, LOW);
+  digitalWrite(LED_B, LOW);
+  delay(200);
+    digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, HIGH);
+  digitalWrite(LED_B, HIGH);
+  delay(200);
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, LOW);
+  digitalWrite(LED_B, LOW);
+  delay(200);
+    digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, HIGH);
+  digitalWrite(LED_B, HIGH);
+  delay(200);
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, LOW);
+  digitalWrite(LED_B, LOW);
+  delay(200);
+    digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, HIGH);
+  digitalWrite(LED_B, HIGH);
+  delay(200);
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, LOW);
+  digitalWrite(LED_B, LOW);
+  delay(200);
+    digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, HIGH);
+  digitalWrite(LED_B, HIGH);
+  delay(200);
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, LOW);
+  digitalWrite(LED_B, LOW);
+  delay(2000);
+  status = 1;
 }
 
 // ✅ **LED 상태 업데이트 및 goal 감소 처리**
 void updateLEDandGoal() {
-    if (receivedAngle <= 20) {
+    if (receivedAngle <= 20 && status == 3) {
         digitalWrite(LED_G, HIGH);
         digitalWrite(LED_R, LOW);
         lowAngleDetected = true;
-    } else if (receivedAngle >= 70) {
+    } else if (receivedAngle >= 70 && status == 3) {
         digitalWrite(LED_G, LOW);
         digitalWrite(LED_R, HIGH);
         if (lowAngleDetected) {
             goal--;
-            if (goal < 1) goal = 1;
             lowAngleDetected = false;
+            digitalWrite(LED_R, LOW);
+            digitalWrite(LED_G, LOW);
+            digitalWrite(LED_B, LOW);
+            if (goal == 0) status = 4;
         }
     }
 }
@@ -270,6 +385,8 @@ void connectToBLEServer() {
     Serial.println("🔗 BLE 서버 연결 시도...");
     BLEClient* pClient = BLEDevice::createClient();
     Serial.println(" - ✅ Created client");
+    BLEstatus = "Created client";
+    updateGoalDisplay();
 
     pClient->setClientCallbacks(new MyClientCallback());
     if (!pClient->connect(myDevice)) {
@@ -279,6 +396,10 @@ void connectToBLEServer() {
     }
 
     Serial.println(" - ✅ Connected to server");
+    BLEstatus = "Connected to s
+    
+    erver";
+    updateGoalDisplay();
 
     BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
     if (!pRemoteService) {
@@ -299,6 +420,8 @@ void connectToBLEServer() {
     if (pRemoteCharacteristic->canNotify()) {
         pRemoteCharacteristic->registerForNotify(notifyCallback);
         Serial.println("✅ Notify 등록 완료! BLE 데이터 수신 대기 중...");
+        BLEstatus = "Notify Ready";
+        delay(1000);
     }
 
     connected = true;
